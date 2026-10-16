@@ -1,0 +1,10 @@
+{
+  "title": "Northstar Incident Runbook",
+  "subtitle": "Revision 1 | Fictional demonstration material",
+  "sections": [
+    ["Purpose", "This runbook defines the first response for a production service incident at Northstar Field Services. The incident lead records the timeline and coordinates responders."],
+    ["Critical incident response", "For a critical incident, the on-call engineer opens an incident channel immediately. The incident lead notifies the Security on-call within 30 minutes of confirming the incident. The service owner provides a customer impact estimate and a next update time."],
+    ["Recovery target", "The initial restoration objective for a critical service is four hours from incident declaration. Responders must preserve relevant logs and record any emergency change in the incident timeline."],
+    ["Related operating guidance", "Vendor-hosted data incidents also use the Northstar Vendor Operations Guide. The guide is separate controlled material and must be consulted for vendor bridge steps."]
+  ]
+}

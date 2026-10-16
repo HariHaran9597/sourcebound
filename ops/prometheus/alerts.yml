@@ -1,0 +1,67 @@
+groups:
+  - name: sourcebound
+    rules:
+      - alert: SourceboundApiUnavailable
+        expr: up{job="sourcebound-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Sourcebound API metrics endpoint is unavailable
+          description: Prometheus has not scraped the Sourcebound API successfully for two minutes.
+
+      - alert: SourceboundHighServerErrorRate
+        expr: |
+          (
+            sum(rate(sourcebound_http_requests_total{job="sourcebound-api",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(sourcebound_http_requests_total{job="sourcebound-api"}[5m])), 0.01)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Sourcebound API server error rate is elevated
+          description: More than 5% of API requests returned 5xx responses over the last five minutes.
+
+      - alert: SourceboundHighRequestLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(sourcebound_http_request_duration_seconds_bucket{job="sourcebound-api"}[10m]))
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Sourcebound API p95 latency is above five seconds
+          description: Review route-level latency, model endpoint health, and dependency saturation.
+
+      - alert: SourceboundFailedIngestionQueueNotEmpty
+        expr: sourcebound_ingestion_queue_messages{job="sourcebound-api",queue="failed"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Failed document-processing messages are waiting
+          description: Inspect the dead-letter queue and failed document versions, resolve the cause, then retry deliberately.
+
+      - alert: SourceboundIngestionQueueStalled
+        expr: |
+          sourcebound_ingestion_queue_messages{job="sourcebound-api",queue="pending"} > 0
+          and sourcebound_ingestion_queue_consumers{job="sourcebound-api",queue="pending"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Documents are queued without an active ingestion consumer
+          description: Check worker health, broker connectivity, and queue availability.
+
+      - alert: SourceboundOperationalDependencyUnavailable
+        expr: sourcebound_operational_dependency_up{job="sourcebound-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Sourcebound cannot query an operational dependency
+          description: Check the dependency label and API logs; operational gauges are unavailable until connectivity recovers.

@@ -1,0 +1,10 @@
+{
+  "title": "Northstar Vendor Operations Guide",
+  "subtitle": "Revision 1 | Fictional demonstration material",
+  "sections": [
+    ["Purpose", "This guide defines vendor coordination during a production issue involving a hosted service or vendor-held data."],
+    ["Vendor bridge", "For a vendor-hosted data incident, the operations lead opens the vendor support bridge within 10 minutes of incident declaration. The incident lead shares only the approved incident identifier and minimum information needed to investigate."],
+    ["Coordination", "The operations lead records the vendor case number and next update time in the incident timeline. Security reviews any request to transfer customer data or diagnostic exports."],
+    ["Source relationship", "This guide supplements the Northstar Incident Runbook for vendor-hosted data incidents. The runbook remains the source for incident severity, notification, and recovery objectives."]
+  ]
+}

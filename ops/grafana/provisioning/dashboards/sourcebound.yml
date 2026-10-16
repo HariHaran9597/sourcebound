@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Sourcebound
+    orgId: 1
+    folder: Sourcebound
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

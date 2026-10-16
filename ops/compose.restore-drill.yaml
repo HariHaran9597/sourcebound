@@ -1,0 +1,115 @@
+name: sourcebound-restore-drill
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sourcebound}
+      POSTGRES_USER: ${POSTGRES_USER:-sourcebound}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-local-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sourcebound} -d ${POSTGRES_DB:-sourcebound}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: sourcebound-rabbitmq
+    environment:
+      RABBITMQ_NODENAME: rabbit@sourcebound-rabbitmq
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-sourcebound}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change-this-local-password}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backup-tools:
+    image: alpine:3.22
+    profiles: [maintenance]
+    volumes:
+      - source_files:/source_files
+      - qdrant_data:/qdrant_data
+      - rabbitmq_data:/rabbitmq_data
+      - ../backups:/backups
+
+  api:
+    image: sourcebound-api
+    command: ["sh", "-c", "alembic upgrade head && uvicorn sourcebound_api.main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      SOURCEBOUND_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-sourcebound}:${POSTGRES_PASSWORD:-change-this-local-password}@postgres:5432/${POSTGRES_DB:-sourcebound}
+      SOURCEBOUND_STORAGE_ROOT: /app/.local/source_files
+      SOURCEBOUND_PARSE_MODE: celery
+      FASTEMBED_CACHE_PATH: /home/sourcebound/.cache/fastembed
+      SOURCEBOUND_CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-sourcebound}:${RABBITMQ_PASSWORD:-change-this-local-password}@rabbitmq:5672//
+      SOURCEBOUND_QDRANT_URL: http://qdrant:6333
+      SOURCEBOUND_RERANKER_ENABLED: ${SOURCEBOUND_RERANKER_ENABLED:-true}
+      SOURCEBOUND_RERANKER_MODEL: ${SOURCEBOUND_RERANKER_MODEL:-Xenova/ms-marco-MiniLM-L-6-v2}
+      SOURCEBOUND_RETRIEVAL_CANDIDATE_LIMIT: ${SOURCEBOUND_RETRIEVAL_CANDIDATE_LIMIT:-32}
+      SOURCEBOUND_LLM_BASE_URL: ${SOURCEBOUND_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      SOURCEBOUND_LLM_API_KEY: ${SOURCEBOUND_LLM_API_KEY:-ollama}
+      SOURCEBOUND_LLM_MODEL: ${SOURCEBOUND_LLM_MODEL:-qwen3.5:2b}
+      SOURCEBOUND_AUTO_CREATE_SCHEMA: "false"
+      SOURCEBOUND_METRICS_ENABLED: ${SOURCEBOUND_METRICS_ENABLED:-true}
+      SOURCEBOUND_TRACING_ENABLED: ${SOURCEBOUND_TRACING_ENABLED:-false}
+      SOURCEBOUND_OTEL_SERVICE_NAME: ${SOURCEBOUND_OTEL_SERVICE_NAME:-sourcebound-api}
+      SOURCEBOUND_TRACE_SAMPLE_RATIO: ${SOURCEBOUND_TRACE_SAMPLE_RATIO:-1.0}
+      SOURCEBOUND_TRACE_OTLP_ENDPOINT: ${SOURCEBOUND_TRACE_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
+      SOURCEBOUND_ASK_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_ASK_RATE_LIMIT_PER_MINUTE:-20}
+      SOURCEBOUND_UPLOAD_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_UPLOAD_RATE_LIMIT_PER_MINUTE:-6}
+      SOURCEBOUND_REPROCESS_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_REPROCESS_RATE_LIMIT_PER_MINUTE:-10}
+      SOURCEBOUND_ORGANIZATION_ASK_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_ORGANIZATION_ASK_RATE_LIMIT_PER_MINUTE:-500}
+      SOURCEBOUND_ORGANIZATION_UPLOAD_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_ORGANIZATION_UPLOAD_RATE_LIMIT_PER_MINUTE:-60}
+      SOURCEBOUND_ORGANIZATION_REPROCESS_RATE_LIMIT_PER_MINUTE: ${SOURCEBOUND_ORGANIZATION_REPROCESS_RATE_LIMIT_PER_MINUTE:-100}
+      SOURCEBOUND_ORGANIZATION_MAX_DOCUMENTS: ${SOURCEBOUND_ORGANIZATION_MAX_DOCUMENTS:-1000}
+      SOURCEBOUND_ORGANIZATION_MAX_STORAGE_BYTES: ${SOURCEBOUND_ORGANIZATION_MAX_STORAGE_BYTES:-10737418240}
+      SOURCEBOUND_API_MAX_IN_FLIGHT: ${SOURCEBOUND_API_MAX_IN_FLIGHT:-200}
+      SOURCEBOUND_ASK_MAX_IN_FLIGHT: ${SOURCEBOUND_ASK_MAX_IN_FLIGHT:-8}
+      SOURCEBOUND_INGESTION_MAX_IN_FLIGHT: ${SOURCEBOUND_INGESTION_MAX_IN_FLIGHT:-2}
+      SOURCEBOUND_CAPACITY_WAIT_SECONDS: ${SOURCEBOUND_CAPACITY_WAIT_SECONDS:-1.0}
+      SOURCEBOUND_RATE_LIMIT_HMAC_KEY: ${SOURCEBOUND_RATE_LIMIT_HMAC_KEY:-local-development-only-change-this-key}
+      SOURCEBOUND_STORE_ANSWER_TRACES: ${SOURCEBOUND_STORE_ANSWER_TRACES:-true}
+      SOURCEBOUND_ANSWER_TRACE_RETENTION_DAYS: ${SOURCEBOUND_ANSWER_TRACE_RETENTION_DAYS:-30}
+      SOURCEBOUND_AUTH_MODE: ${SOURCEBOUND_AUTH_MODE:-disabled}
+      SOURCEBOUND_OIDC_ISSUER: ${SOURCEBOUND_OIDC_ISSUER:-}
+      SOURCEBOUND_OIDC_AUDIENCE: ${SOURCEBOUND_OIDC_AUDIENCE:-}
+    volumes:
+      - source_files:/app/.local/source_files
+      - model_cache:/home/sourcebound/.cache/fastembed:ro
+      - huggingface_cache:/home/sourcebound/.cache/huggingface:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  rabbitmq_data:
+  source_files:
+  model_cache:
+    external: true
+    name: sourcebound_model_cache
+  huggingface_cache:
+    external: true
+    name: sourcebound_huggingface_cache

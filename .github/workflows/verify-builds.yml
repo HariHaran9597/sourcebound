@@ -1,0 +1,58 @@
+name: Verify build and schema
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sourcebound-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+      - name: Build production frontend
+        working-directory: frontend
+        run: npm run build
+
+  sqlite-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}/backend/src
+      SOURCEBOUND_DATABASE_URL: sqlite:///./.local/sourcebound-ci.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install schema-check dependencies
+        run: python -m pip install "alembic>=1.14,<2" "SQLAlchemy>=2,<3" "pydantic-settings>=2.7,<3"
+      - name: Compile backend and migrations
+        working-directory: backend
+        run: python -m compileall -q src migrations ../scripts
+      - name: Apply every migration to SQLite
+        working-directory: backend
+        run: |
+          mkdir -p .local
+          alembic upgrade head
+          alembic current

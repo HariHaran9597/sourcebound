@@ -1,0 +1,10 @@
+{
+  "title": "Northstar Data Retention Standard",
+  "subtitle": "Revision 1 | Fictional demonstration material",
+  "sections": [
+    ["Purpose", "This standard describes routine retention periods for the fictional Northstar Field Services environment."],
+    ["Operational backups", "Daily operational backups are retained for 30 days. A restore request must identify the target service, requested recovery point, and approving service owner."],
+    ["Customer archives", "Customer archives are retained for 365 days unless a signed customer agreement specifies a different period. Legal holds override routine deletion schedules and require review by the records owner."],
+    ["Deletion", "At the end of the applicable retention period, the storage owner schedules deletion and records completion in the service change log."]
+  ]
+}
