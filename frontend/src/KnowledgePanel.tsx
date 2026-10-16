@@ -370,4 +370,3 @@ export function KnowledgePanel({ view, isWorkspaceAdmin }: Props) {
   )
 }
 
-\n
